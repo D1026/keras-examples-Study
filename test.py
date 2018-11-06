@@ -1,4 +1,5 @@
 import tensorflow as tf
+import keras.backend as K
 
 a = tf.constant([[1, 2],
                  [3, 4]])
@@ -10,4 +11,4 @@ with tf.Session() as sess:
     print(tf.tensordot(a, b, axes=1).eval())
     print((a+c).eval())
     print(tf.reduce_sum(a, axis=-1).eval())
-    print(())
+    print(K.dot())

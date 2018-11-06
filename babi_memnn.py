@@ -1,15 +1,11 @@
 '''Trains a memory network on the bAbI dataset.
-
 References:
-
 - Jason Weston, Antoine Bordes, Sumit Chopra, Tomas Mikolov, Alexander M. Rush,
   "Towards AI-Complete Question Answering: A Set of Prerequisite Toy Tasks",
   http://arxiv.org/abs/1502.05698
-
 - Sainbayar Sukhbaatar, Arthur Szlam, Jason Weston, Rob Fergus,
   "End-To-End Memory Networks",
   http://arxiv.org/abs/1503.08895
-
 Reaches 98.6% accuracy on task 'single_supporting_fact_10k' after 120 epochs.
 Time per epoch: 3s on CPU (core i7).
 '''
@@ -17,8 +13,8 @@ from __future__ import print_function
 
 from keras.models import Sequential, Model
 from keras.layers.embeddings import Embedding
-from keras.layers import Input, Activation, Dense, Permute, Dropout, Lambda
-from keras.layers import add, dot, concatenate, multiply
+from keras.layers import Input, Activation, Dense, Permute, Dropout
+from keras.layers import add, dot, concatenate
 from keras.layers import LSTM
 from keras.utils.data_utils import get_file
 from keras.preprocessing.sequence import pad_sequences
@@ -26,12 +22,10 @@ from functools import reduce
 import tarfile
 import numpy as np
 import re
-import keras.backend as K
 
 
 def tokenize(sent):
     '''Return the tokens of a sentence including punctuation.
-
     >>> tokenize('Bob dropped the apple. Where is the apple?')
     ['Bob', 'dropped', 'the', 'apple', '.', 'Where', 'is', 'the', 'apple', '?']
     '''
@@ -40,7 +34,6 @@ def tokenize(sent):
 
 def parse_stories(lines, only_supporting=False):
     '''Parse stories provided in the bAbi tasks format
-
     If only_supporting is true, only the sentences
     that support the answer are kept.
     '''
@@ -74,7 +67,6 @@ def get_stories(f, only_supporting=False, max_length=None):
     '''Given a file name, read the file,
     retrieve the stories,
     and then convert the sentences into a single story.
-
     If max_length is supplied,
     any stories longer than max_length tokens will be discarded.
     '''
@@ -172,7 +164,7 @@ question = Input((query_maxlen,))
 # embed the input sequence into a sequence of vectors
 input_encoder_m = Sequential()
 input_encoder_m.add(Embedding(input_dim=vocab_size,
-                              output_dim=64))
+                              output_dim=story_maxlen))
 input_encoder_m.add(Dropout(0.3))
 # output: (samples, story_maxlen, embedding_dim)
 
@@ -186,7 +178,7 @@ input_encoder_c.add(Dropout(0.3))
 # embed the question into a sequence of vectors
 question_encoder = Sequential()
 question_encoder.add(Embedding(input_dim=vocab_size,
-                               output_dim=64,
+                               output_dim=story_maxlen,
                                input_length=query_maxlen))
 question_encoder.add(Dropout(0.3))
 # output: (samples, query_maxlen, embedding_dim)
@@ -204,23 +196,18 @@ match = dot([input_encoded_m, question_encoded], axes=(2, 2))
 match = Activation('softmax')(match)
 
 # add the match matrix with the second input vector sequence
-# -----------------
-
-
-def reduce(x):
-    x = K.sum(x,axis=-1)
-    x = K.reshape(x, [-1, 68, 1])
-    x = K.dot(x, K.ones([1, 4]))
-    print('------------------', x)
-    return x
-
-
-match = Lambda(reduce)(match)
-response = multiply([match, input_encoded_c])  # (samples, story_maxlen, query_maxlen)
-
-# ------------------------
-# response = add([match, input_encoded_c])  # (samples, story_maxlen, query_maxlen)
+response = add([match, input_encoded_c])  # (samples, story_maxlen, query_maxlen)
 response = Permute((2, 1))(response)  # (samples, query_maxlen, story_maxlen)
+
+# ----------------------------
+for _ in range(3-1):
+
+    match = dot([input_encoded_m, response], axes=(2, 2))
+    match = Activation('softmax')(match)
+
+    # add the match matrix with the second input vector sequence
+    response = add([match, input_encoded_c])  # (samples, story_maxlen, query_maxlen)
+    response = Permute((2, 1))(response)  # (samples, query_maxlen, story_maxlen)
 
 # concatenate the match matrix with the question vector sequence
 answer = concatenate([response, question_encoded])
